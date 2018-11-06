@@ -8,7 +8,7 @@ This will be a repo created to hold a snake implementation written in C for clas
 
 Write a C program snake that implements the classic snake game.
 
--[ ] The game must utilize all available space of the current terminal window.
+- [ ] The game must utilize all available space of the current terminal window.
 
 -[ ] There must be a visible border delineating the area where the snake can move.
 
