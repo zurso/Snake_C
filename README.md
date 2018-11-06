@@ -33,7 +33,7 @@ expired or is eaten by the snake.
 
 - [ ] The snake's speed is increased in a linear proportion with its length.
 
-## - [ ] The snake dies and the game ends if:
+- [ ] The snake dies and the game ends if:
 - [ ]It runs into the border; or
 - [ ]It runs into itself; or
 - [ ]The user attempts to reverse the snake's direction.
