@@ -8,20 +8,20 @@ This will be a repo created to hold a snake implementation written in C for clas
 
 Write a C program snake that implements the classic snake game.
 
-- [ ] The game must utilize all available space of the current terminal window.
+- [x] The game must utilize all available space of the current terminal window.
 
-- [ ] There must be a visible border delineating the area where the snake can move.
+- [x] There must be a visible border delineating the area where the snake can move.
 
-- [ ] The initial length of snake is one character.
+- [x] The initial length of snake is one character.
 
 - [ ] Initial direction of the snake's movement is chosen randomly.
 
-- [ ] The user can press one of the four arrow keys to change the direction of the snake's
+- [x] The user can press one of the four arrow keys to change the direction of the snake's
 movement.
 
 - [ ] Trophies are represented by a digit randomly chosen from 1 to 9.
 
-- [ ] There's always exactly one trophy at any given moment.
+- [x] There's always exactly one trophy at any given moment.
 
 - [ ] When the snake eats the trophy, its length is increased by the corresponding number of
 characters.
@@ -33,10 +33,10 @@ expired or is eaten by the snake.
 
 - [ ] The snake's speed is increased in a linear proportion with its length.
 
-- [ ] The snake dies and the game ends if:
-- [ ] It runs into the border; or
-- [ ] It runs into itself; or
-- [ ] The user attempts to reverse the snake's direction.
+- [x] The snake dies and the game ends if:
+- [x] It runs into the border; or
+- [x] It runs into itself; or
+- [x] The user attempts to reverse the snake's direction.
 
 - [ ] The user wins the game if the snake's length grows to the length equal to half the
 perimeter of the border.
