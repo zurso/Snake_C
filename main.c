@@ -1,180 +1,397 @@
-#include <ncurses.h>
-#include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
-
+#include <time.h>
+#include <signal.h>
+#include <sys/time.h>
+#include <sys/ioctl.h>
+#include <ncurses.h>
+//tickrate
+#define TICK 200000
+//arrows 
+#define DOWN  1
+#define UP    2
+#define LEFT  3
+#define RIGHT 4
+//points and length
+#define MOVIN 1
+#define EATIN 4 // change this when making numbers appear, this will be what they get when they hit a random number
+#define SNAKELENGTH 2
+//collision checks
 #define USER 1
-#define WALL 2
-#define TICKRATE 100
-//length global so everyone can use it, collision also global scope
-int SNAKEY_LENGTH = 2;
-int COLLISION = 1;
-
-//struct definition
-
-typedef struct spart {
-    int x;
-    int y;
-} snakeypart;
-
-snakeypart food;
-int isfood = 1;
-
-//Function Prototypes
-int move_snakey(WINDOW *win, int direction, snakeypart snakey[]);
-int checkCollision(snakeypart snakey[], int x, int y);
-enum direction { UP, DOWN, RIGHT, LEFT };
-void spawn_food();
-void print_score();
-void quit(int reason);
-
-
-int main(int argc, char *argv[]) {
-
-    int i, ch;
-
-    initscr();
-    noecho();
-    cbreak();
-    timeout(TICKRATE);
-    keypad(stdscr, TRUE);
-
-    printw("Snake Game  -  Press x to quit...");
-
-    refresh();
-
-    snakeypart snakey[SNAKEY_LENGTH];
-
-    int sbegx = (COLS - SNAKEY_LENGTH) / 2;
-    int sbegy = (LINES - 1) / 2;
-
-    for (i = 0; i < SNAKEY_LENGTH; i++) {
-        snakey[i].x = sbegx + i;
-        snakey[i].y = sbegy;
-    }
-    int cur_dir = RIGHT;
+#define SELF 2
+#define WALL 3
+//snake items (peices, trophies, empty spacing)
+#define SNAKEPEICE 'o'
+#define EMPTY      ' '
+#define FOOD       '#'
+//set the timer so we can use TICK (how fast the snake moves)
+void SetTime(void);
+//set the signals 
+void SetSig(void);
+//create the snake 
+void snakeCreate(void);
+//moves the snake
+void snakeMove(void);
+//this function draws area, snake, and food
+void snakeDraw(void);
+//frees taken snake mem allocated
+void releaseSnake(void);
+//randomly places food within the games board
+void spawnFood(void);
+//this function handles all errors throughout the game
+void ErrorOut(char * msg);
+// happens when a normal game 'error' occurs (hit wall, self, etc..)
+void quitOut( int reason );
+//gets the current terminal size (this is used for random fruit genorator)
+void GetTermSize(int * rows, int * cols);
+// starts the sig handler
+void handler();
+//changes direction on key press
+void dirChange();
 
 
-    spawn_food(); // getting food on the board
-    while ((ch = getch()) != 'x') {
-        move_snakey(stdscr, cur_dir, snakey);
-        if(COLLISION=0)
-            break;
-        if(ch != ERR) {
-            switch(ch) {
-                case KEY_UP:
-                    cur_dir = UP;
-                    break;
-                case KEY_DOWN:
-                    cur_dir = DOWN;
-                    break;
-                case KEY_RIGHT:
-                    cur_dir = RIGHT;
-                    break;
-                case KEY_LEFT:
-                    cur_dir = LEFT;
-                    break;
-                default:
-                    break;
-            }
+//declare global struct
+struct snake_peice {
+	struct snake_peice * next;
+	int x;
+	int y;
+};
+typedef struct snake_peice SNAKE;
 
-        }
-    }
+static SNAKE * snake;
+static int direction = DOWN;
+static int rows, cols;
+int score = 0; // this is the main score
 
-    quit(USER);
+WINDOW * mainwin;
+int oldsettings;
 
-    return 0;
+int main(void){
+	
+	//rng seed, timer set, register handlers
+	srand( ( unsigned ) time(NULL)) ;
+	SetTime();
+	SetSig();
+
+	//Curses will be set here
+	if ( (mainwin = initscr()) == NULL){
+		perror("Could not set ncurses");
+		exit(EXIT_FAILURE); // might change to case statment inside of quit function
+	}
+
+	noecho();
+	keypad(mainwin, TRUE);
+	oldsettings = curs_set(0); // save term settings using curs set and 0 (will be 1 when done)
+	
+	//create snake and draw the board 
+	snakeCreate();
+	snakeDraw();
+
+	while (1){
+		int arrow = getch();
+
+		switch( arrow ){
+
+			case KEY_UP:
+				dirChange(UP);
+				break;
+			case KEY_DOWN:
+				dirChange(DOWN);
+				break;
+			case KEY_LEFT:
+				dirChange(LEFT);
+				break;
+			case KEY_RIGHT:
+				dirChange(RIGHT);
+				break;
+			case 'Q':
+			case 'q':
+				quitOut(USER);
+				break;
+		}
+	}
+
+	return EXIT_SUCCESS; //doesn't
+}
+
+void SetTime(void){
+	struct itimerval it;
+
+	timerclear(&it.it_interval);
+	timerclear(&it.it_value);
+
+	//set time
+
+	it.it_interval.tv_usec = TICK;
+	it.it_value.tv_usec    = TICK;
+	setitimer(ITIMER_REAL, &it, NULL);
+}
+
+//sig handlers
+void SetSig(void){
+	struct sigaction sa;
+
+	sa.sa_handler = handler;
+	sa.sa_flags = 0;
+	sigemptyset(&sa.sa_mask);
+
+	sigaction(SIGTERM,  &sa, NULL);
+	sigaction(SIGINT,   &sa, NULL);
+	sigaction(SIGALRM, &sa, NULL);
+
+	sa.sa_handler = SIG_IGN;
+	sigaction(SIGTSTP, &sa, NULL);
+}
+
+void snakeCreate(void){
+	SNAKE * temp;
+	int x = 1, y = 1, i;
+
+	//make sure we can hold the whole snake
+	for (i = 0; i < SNAKELENGTH; i++){
+		if (i == 0){
+			if ((snake = malloc(sizeof(SNAKE))) == NULL)
+				ErrorOut("Could not allocate mem");
+			temp = snake;
+		}
+		else {
+			// if this isnt the head of mr. snake
+			if ((temp->next = malloc(sizeof(SNAKE))) == NULL)
+				ErrorOut("Coud not allocate mem");
+			temp = temp->next; // go to next peice (tail kinda)
+		}
+		temp->x = x;   //place each peice down
+		temp->y = y++; //for the snake
+	}
+	temp->next = NULL;
+
+	GetTermSize(&rows, &cols);
+}
+
+void snakeDraw(void){
+	SNAKE * temp = snake;
+
+	//area creation (simple box call and use default borders)
+	box(stdscr, 0, 0); //you can change the 0's to any chars you want as the border (goes in y, x order)
+
+	//snake gets drawn to screen
+	while ( temp ){
+		move(temp->y, temp->x);
+		addch(SNAKEPEICE);
+		temp = temp->next; // get next peice and go to top of this loop, do for all peices in given (2 initially)
+	}
+
+	//foods
+	// this will change when we create the random food creator
+	spawnFood();
+}
+
+void snakeMove(void){
+	SNAKE * temp = snake;
+	int x, y, ch;
+
+	//go to end of mr. snake
+
+	while ( temp->next != NULL )
+		temp = temp->next;
+
+	//create new snake peice to add to it
+
+	if ((temp->next = malloc(sizeof(SNAKE))) == NULL)
+		ErrorOut("Could not allocate mem while inside of snakeMove() ");
+
+	// find where to add mr. snakes new tail peice!
+
+	switch(direction){
+		case DOWN:
+			x = temp->x;
+			y = temp->y + 1;
+			break;
+		case UP:
+			x = temp->x;
+			y = temp->y - 1;
+			break;
+		case LEFT:
+			x = temp->x - 1;
+			y = temp->y;
+			break;
+		case RIGHT:
+			x = temp->x + 1;
+			y = temp->y;
+			break;
+	}
+
+	//fill the new tail peice
+	temp       = temp->next;
+	temp->next = NULL;
+	temp->x    = x;
+	temp->y    = y;
+
+	//check collision switch statement
+	move(y, x);
+	switch( (ch = inch()) ){
+		case EMPTY:
+			score += MOVIN;
+
+			temp = snake->next;
+			move(snake->y, snake->x);
+			addch(EMPTY);
+			free(snake);
+			snake = temp;
+
+		case FOOD:
+			// add new snake peice to end
+			move(y, x);
+			addch(SNAKEPEICE);
+			if (ch == FOOD){
+				
+				spawnFood();
+
+				score += EATIN;
+			}
+
+			refresh();
+			break;
+
+		case SNAKEPEICE:
+			quitOut(SELF);
+
+		default:
+		quitOut(WALL);
+
+	}
 
 }
 
-int move_snakey(WINDOW *stdscr, int direction, snakeypart snakey[]) {
+void spawnFood(void){
+	int x, y;
 
-    wclear(stdscr);
+	do {
+		x = rand() % (cols - 3) + 1;
+		y = rand() % (cols - 3) + 1;
+		move(y, x);
+	} while ( inch() != EMPTY ); 
 
-    for (int i = 0; i < SNAKEY_LENGTH - 1; i++) {
-        snakey[i] = snakey[i + 1];
-        mvwaddch(stdscr, snakey[i].y, snakey[i].x, '#');
-    }
-
-    int x = snakey[SNAKEY_LENGTH - 1].x;
-    int y = snakey[SNAKEY_LENGTH - 1].y;
-    switch (direction) {
-        case UP:
-            y - 1 == 0 ? y = LINES - 2 : y--;
-            break;
-        case DOWN:
-            y + 1 == LINES - 1 ? y = 1 : y++;
-            break;
-        case RIGHT:
-            x + 1 == COLS - 1 ? x = 1 : x++;
-            break;
-        case LEFT:
-            x - 1 == 0 ? x = COLS - 2 : x--;
-            break;
-        default:
-            break;
-    }
-
-    snakey[SNAKEY_LENGTH - 1].x = x;
-    snakey[SNAKEY_LENGTH - 1].y = y;
-
-    mvwaddch(stdscr, y, x, '#');
-    if (isfood == 0){
-        mvwaddch(stdscr, food.y, food.x, '$');
-    }
-    else {
-        spawn_food();
-    }
-    wresize(stdscr, LINES, COLS);
-    checkCollision(snakey, x, y);
-    box(stdscr, '|' , '-');
-
-    wrefresh(stdscr);
-
-    return 0;
+	addch(FOOD);
 }
 
-void print_score(){
-    mvwaddch(stdscr, LINES+1, LINES+1, 'x');
+void dirChange(int d){
+	SNAKE * temp = snake;
+
+	//go to end of mr.snakey
+	while ( temp->next != NULL )
+		temp = temp->next;
+
+	switch(d){
+		case LEFT:
+			if (direction == RIGHT )
+				quitOut(SELF); // if hit itself reverse
+			move(temp->y, temp->x - 1);
+			break;
+
+		case RIGHT:
+			if (direction == LEFT )
+				quitOut(SELF); // if hit itself reverse
+			move(temp->y, temp->x + 1);
+			break;
+
+		case UP:
+			if (direction == DOWN )
+				quitOut(SELF);// if hit itself reverse
+			move(temp->y - 1, temp->x);
+			break;
+
+		case DOWN:
+			if(direction == UP)
+				quitOut(SELF);// if hit itself reverse
+			move(temp->y + 1, temp->x);
+			break;
+	}
+	direction = d;
 }
 
-void spawn_food(){
-    srand(time(NULL));
-    food.x= 1 + (rand() % (COLS-2));
-    food.y= 1 + (rand() % (LINES-2));
-    isfood = 0;
+
+//giving back mem we took for snake during malloc
+void releaseSnake(void){
+	SNAKE * temp = snake;
+
+	while( snake ){
+		temp = snake->next;
+		free(snake);
+		snake = temp;
+	}
 }
 
-int checkCollision(snakeypart snakey[], int x, int y){
+void ErrorOut(char * msg){
 
-    if (x == 1 || y == 1){ // wall collision
-        quit(WALL);
-    }
-    else if (x == food.x && y == food.y){ // food collision
-        mvwdelch(stdscr, food.y, food.x );
-        isfood = 1;
-    }
-    //Trying to get if the snake hits the snake lol
-    //else if (x == x+1 || y == y+1){
-    //    quit(WALL);
-    //}
+	// lets clean this up due to error
 
+	delwin(mainwin);
+	curs_set(oldsettings);
+	endwin();
+	refresh();
+	releaseSnake(); // give back allocated snake mem
+
+	perror(msg);
+	exit(EXIT_FAILURE);
+}
+// these are successful quits
+void quitOut(int reason){
+
+	// lets clean this up due to quit call
+	delwin(mainwin);
+	curs_set(oldsettings);
+	endwin();
+	refresh();
+	releaseSnake(); // give back allocated snake mem
+
+	switch(reason) {
+		case WALL:
+			printf("\nYou hit the wall! GG\n");
+			printf("Your score-> %d\n", score);
+			break;
+
+		case SELF:
+			printf("\nYou hit yourself! GG\n");
+			printf("Your score-> %d\n", score);
+			break;
+		
+		default:
+			printf("\nBYE\n");
+			break;
+	}
+	exit(EXIT_SUCCESS);
 }
 
-void quit(int reason){
-    delwin(stdscr);
-    endwin();
-    refresh();
+void GetTermSize(int *rows, int *cols){
+	struct winsize ws;
 
-    switch( reason ){
-        case USER:
-            printf("\nUser hit x! \n");
-            break;
-        case WALL:
-            printf("\nYou hit hit the wall!\n");
-        default:
-            printf("Goodbye!\n");
-            break;
-    }
-    exit(EXIT_SUCCESS);
+	if ( ioctl(0, TIOCGWINSZ, &ws) < 0 ){
+		perror("Could not get term size..");
+		exit(EXIT_FAILURE);
+	}
+
+	*rows = ws.ws_row;  //setting the global row
+	*cols = ws.ws_col; // now cols
+}
+
+void handler(int signum){
+
+	switch( signum ){
+		case SIGALRM:
+			//gets from the timer (tickrate)
+			snakeMove();
+			return;
+
+		case SIGTERM:
+		case SIGINT:
+
+			//do some cleanup... bc we're nice hehe
+			delwin(mainwin);
+			curs_set(oldsettings);
+			endwin();
+			refresh();
+			releaseSnake(); // give back allocated snake mem
+			exit(EXIT_SUCCESS); 
+	}
 }
