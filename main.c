@@ -6,7 +6,7 @@
 #include <sys/ioctl.h>
 #include <ncurses.h>
 //tickrate
-#define TICK 200000
+int TICK = 200000;
 //arrows 
 #define DOWN  1
 #define UP    2
@@ -59,7 +59,6 @@ void GetTermSize(int * rows, int * cols);
 void handler();
 //changes direction on key press
 void dirChange();
-//prints random number 0-9 for prize
 //start direction is chosen at random
 void startDirection(int * direction);
 
@@ -273,7 +272,8 @@ void snakeMove(void){
 			if (ch == trophy){
 				
 				spawnFood();
-
+				TICK-=10000;
+				SetTime();
 				score += EATIN;
 			}
 
