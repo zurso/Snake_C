@@ -23,7 +23,18 @@
 //snake items (peices, trophies, empty spacing)
 #define SNAKEPEICE 'o'
 #define EMPTY      ' '
-#define FOOD       '#'
+
+#define ZERO       '0'
+#define ONE        '1'		
+#define TWO        '2'
+#define THREE      '3'
+#define FOUR       '4'
+#define FIVE       '5'
+#define SIX        '6'
+#define SEVEN      '7'
+#define EIGHT      '8'
+#define NINE       '9'
+
 //set the timer so we can use TICK (how fast the snake moves)
 void SetTime(void);
 //set the signals 
@@ -48,7 +59,9 @@ void GetTermSize(int * rows, int * cols);
 void handler();
 //changes direction on key press
 void dirChange();
-
+//prints random number 0-9 for prize
+//start direction is chosen at random
+void startDirection(int * direction);
 
 //declare global struct
 struct snake_peice {
@@ -59,9 +72,10 @@ struct snake_peice {
 typedef struct snake_peice SNAKE;
 
 static SNAKE * snake;
-static int direction = DOWN;
+static int direction;
 static int rows, cols;
 int score = 0; // this is the main score
+int printednumber;
 
 WINDOW * mainwin;
 int oldsettings;
@@ -84,6 +98,7 @@ int main(void){
 	oldsettings = curs_set(0); // save term settings using curs set and 0 (will be 1 when done)
 	
 	//create snake and draw the board 
+	startDirection(&direction);
 	snakeCreate();
 	snakeDraw();
 
@@ -106,6 +121,7 @@ int main(void){
 				break;
 			case 'Q':
 			case 'q':
+			case KEY_BACKSPACE:
 				quitOut(USER);
 				break;
 		}
@@ -145,7 +161,8 @@ void SetSig(void){
 
 void snakeCreate(void){
 	SNAKE * temp;
-	int x = 1, y = 1, i;
+	GetTermSize(&rows, &cols);
+	int x = 4, y = 10, i;
 
 	//make sure we can hold the whole snake
 	for (i = 0; i < SNAKELENGTH; i++){
@@ -189,7 +206,7 @@ void snakeDraw(void){
 void snakeMove(void){
 	SNAKE * temp = snake;
 	int x, y, ch;
-
+	char trophy = printednumber + '0';
 	//go to end of mr. snake
 
 	while ( temp->next != NULL )
@@ -239,11 +256,21 @@ void snakeMove(void){
 			free(snake);
 			snake = temp;
 
-		case FOOD:
+		case ZERO:
+		case ONE:
+		case TWO:
+		case THREE:
+		case FOUR:
+		case FIVE:
+		case SIX:
+		case SEVEN:
+		case EIGHT:
+		case NINE:
 			// add new snake peice to end
 			move(y, x);
 			addch(SNAKEPEICE);
-			if (ch == FOOD){
+
+			if (ch == trophy){
 				
 				spawnFood();
 
@@ -268,11 +295,12 @@ void spawnFood(void){
 
 	do {
 		x = rand() % (cols - 3) + 1;
-		y = rand() % (cols - 3) + 1;
+		y = rand() % (rows - 3) + 1;
 		move(y, x);
 	} while ( inch() != EMPTY ); 
-
-	addch(FOOD);
+	
+	printednumber = rand() % 10;
+	addch(printednumber+'0');
 }
 
 void dirChange(int d){
@@ -358,6 +386,7 @@ void quitOut(int reason){
 		
 		default:
 			printf("\nBYE\n");
+			printf("Your score-> %d\n", score);
 			break;
 	}
 	exit(EXIT_SUCCESS);
@@ -394,4 +423,27 @@ void handler(int signum){
 			releaseSnake(); // give back allocated snake mem
 			exit(EXIT_SUCCESS); 
 	}
+}
+
+void startDirection(int *direction){
+
+	int randomNumber;
+	randomNumber = rand() % 4 + 1;
+
+	switch( randomNumber ){
+		case 1:
+			*direction = UP;
+			break;
+		case 2:
+			*direction = DOWN;
+			break;
+		case 3:
+			*direction = LEFT;
+			break;
+		case 4:
+			*direction = RIGHT;
+			break;
+
+	}
+
 }
