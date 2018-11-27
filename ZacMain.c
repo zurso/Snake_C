@@ -1,4 +1,3 @@
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -17,11 +16,12 @@ int TICKINC = 1000;
 //points and length
 #define MOVIN 1
 #define EATIN 4 // change this when making numbers appear, this will be what they get when they hit a random number
-#define SNAKELENGTH 2
+#define SNAKELENGTH 4
 //collision checks
 #define USER 1
 #define SELF 2
 #define WALL 3
+#define WIN  4
 //snake items (peices, trophies, empty spacing)
 #define SNAKEPEICE 'o'
 #define EMPTY      ' '
@@ -73,13 +73,13 @@ struct snake_piece {
 typedef struct snake_piece SNAKE;
 
 static SNAKE * snake;
+static SNAKE * tail;
 static int direction;
 static int rows, cols;
 int score = 0; // this is the main score
 int printednumber;
-//ZZZZZZZZZZZZZZ
-int piecesToAdd = 0;
-//UUUUUUUUUUUUU
+int piecesToAdd = SNAKELENGTH-1;
+int slength;
 
 WINDOW * mainwin;
 int oldsettings;
@@ -163,59 +163,42 @@ void SetSig(void){
 	sigaction(SIGTSTP, &sa, NULL);
 }
 
+//written by Zachary Urso
 void snakeCreate(void){
 	SNAKE * temp;
 	GetTermSize(&rows, &cols);
-	int x = 4, y = 10, i;
-
-	//make sure we can hold the whole snake
-	for (i = 0; i < SNAKELENGTH; i++){
-		if (i == 0){
-			if ((snake = malloc(sizeof(SNAKE))) == NULL)
-				ErrorOut("Could not allocate mem");
-			temp = snake;
-		}
-		else {
-			// if this isnt the head of mr. snake
-			if ((temp->next = malloc(sizeof(SNAKE))) == NULL)
-				ErrorOut("Coud not allocate mem");
-			temp = temp->next; // go to next peice (tail kinda)
-		}
-		temp->x = x;   //place each peice down
-		temp->y = y++; //for the snake
+	int x = cols/2, y = rows/2;
+	if ((snake = malloc(sizeof(SNAKE))) == NULL)
+	{
+		ErrorOut("Could not allocate mem");
 	}
+	temp = snake;
+	temp->x = x;
+	temp->y = y;
 	temp->next = NULL;
-
-	GetTermSize(&rows, &cols);
+	tail = temp;
+	slength = SNAKELENGTH;
 }
-
+//Written by Zachary Urso
 void snakeDraw(void){
 	SNAKE * temp = snake;
 
 	//area creation (simple box call and use default borders)
 	box(stdscr, 0, 0); //you can change the 0's to any chars you want as the border (goes in y, x order)
 
-	//snake gets drawn to screen
-	while ( temp ){
-		move(temp->y, temp->x);
-		addch(SNAKEPEICE);
-		temp = temp->next; // get next peice and go to top of this loop, do for all peices in given (2 initially)
-	}
-
+	//snake head gets drawn to screen
+	move(temp->y, temp->x);
+	addch(SNAKEPEICE);
 	//foods
 	// this will change when we create the random food creator
 	spawnFood();
 }
 
+//Written by Zachary Urso
 void snakeMove(void){
-	SNAKE * temp = snake;
+	SNAKE * temp = tail;
 	int x, y, ch;
 	char trophy = printednumber + '0';
-	//go to end of mr. snake
-
-	while ( temp->next != NULL )
-		temp = temp->next;
-
 	//create new snake peice to add to it
 
 	if ((temp->next = malloc(sizeof(SNAKE))) == NULL)
@@ -247,7 +230,7 @@ void snakeMove(void){
 	temp->next = NULL;
 	temp->x    = x;
 	temp->y    = y;
-
+	tail = temp;
 	//check collision switch statement
 	move(y, x);
 	ch = inch();
@@ -258,6 +241,11 @@ void snakeMove(void){
 		if(ch==trophy)
 		{
 			piecesToAdd += trophy - '0';
+			slength += trophy - '0';
+			if(slength >= (rows+cols))
+			{
+				quitOut(WIN);
+			}
 			TICK-=TICKINC*(trophy - '0');
 			spawnFood();
                		SetTime();
@@ -296,7 +284,7 @@ void spawnFood(void){
 		move(y, x);
 	} while ( inch() != EMPTY ); 
 	
-	printednumber = rand() % 10;
+	printednumber = (rand() % 9)+1;
 	addch(printednumber+'0');
 }
 
@@ -380,6 +368,11 @@ void quitOut(int reason){
 			printf("\nYou hit yourself! GG\n");
 			printf("Your score-> %d\n", score);
 			break;
+
+		case WIN:
+			printf("\nYou win! GG\n");
+                        printf("Your score-> %d\n", score);
+                        break;
 		
 		default:
 			printf("\nBYE\n");
